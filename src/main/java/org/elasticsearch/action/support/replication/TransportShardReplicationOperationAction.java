@@ -590,7 +590,6 @@ public abstract class TransportShardReplicationOperationAction<Request extends S
                 
                 // if its initializing and internalIndexShard is recovering, ignore it
                 // reduce, but not eliminate
-                //
                 if(shard.initializing()){
                 	final InternalIndexShard internalIndexShard = (InternalIndexShard) indicesService.indexServiceSafe(shardIt.shardId().index().name()).shardSafe(shardIt.shardId().id());
                 	if(internalIndexShard.targetNodeInRecoveryMap().containsKey(shard.currentNodeId()) ) {
