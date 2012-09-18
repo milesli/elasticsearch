@@ -26,6 +26,7 @@ import org.apache.lucene.store.AlreadyClosedException;
 import org.apache.lucene.util.UnicodeUtil;
 import org.elasticsearch.ElasticSearchException;
 import org.elasticsearch.cluster.metadata.IndexMetaData;
+import org.elasticsearch.cluster.node.DiscoveryNode;
 import org.elasticsearch.cluster.routing.operation.hash.djb.DjbHashFunction;
 import org.elasticsearch.common.Nullable;
 import org.elasticsearch.common.Preconditions;
@@ -146,6 +147,8 @@ public class RobinEngine extends AbstractIndexShardComponent implements Engine {
     private final AtomicBoolean flushing = new AtomicBoolean();
 
     private final ConcurrentMap<String, VersionValue> versionMap;
+    
+    private final ConcurrentMap<String, DiscoveryNode> targetNodeInRecoveryMap;    
 
     private final Object[] dirtyLocks;
 
@@ -194,6 +197,7 @@ public class RobinEngine extends AbstractIndexShardComponent implements Engine {
 
         this.indexConcurrency = indexSettings.getAsInt("index.index_concurrency", IndexWriterConfig.DEFAULT_MAX_THREAD_STATES);
         this.versionMap = ConcurrentCollections.newConcurrentMap();
+        this.targetNodeInRecoveryMap = ConcurrentCollections.newConcurrentMap();        
         this.dirtyLocks = new Object[indexConcurrency * 50]; // we multiply it to have enough...
         for (int i = 0; i < dirtyLocks.length; i++) {
             dirtyLocks[i] = new Object();
@@ -1062,12 +1066,13 @@ public class RobinEngine extends AbstractIndexShardComponent implements Engine {
     }
 
     @Override
-    public void recover(RecoveryHandler recoveryHandler) throws EngineException {
+    public void recover(DiscoveryNode targetNode, RecoveryHandler recoveryHandler) throws EngineException {
         // take a write lock here so it won't happen while a flush is in progress
         // this means that next commits will not be allowed once the lock is released
         rwl.writeLock().lock();
         try {
             disableFlushCounter++;
+            targetNodeInRecoveryMap.putIfAbsent(targetNode.id(), targetNode);
         } finally {
             rwl.writeLock().unlock();
         }
@@ -1077,6 +1082,7 @@ public class RobinEngine extends AbstractIndexShardComponent implements Engine {
             phase1Snapshot = deletionPolicy.snapshot();
         } catch (Exception e) {
             --disableFlushCounter;
+            targetNodeInRecoveryMap.remove(targetNode.id());
             throw new RecoveryEngineException(shardId, 1, "Snapshot failed", e);
         }
 
@@ -1084,6 +1090,7 @@ public class RobinEngine extends AbstractIndexShardComponent implements Engine {
             recoveryHandler.phase1(phase1Snapshot);
         } catch (Exception e) {
             --disableFlushCounter;
+            targetNodeInRecoveryMap.remove(targetNode.id());
             phase1Snapshot.release();
             if (closed) {
                 e = new EngineClosedException(shardId, e);
@@ -1096,6 +1103,7 @@ public class RobinEngine extends AbstractIndexShardComponent implements Engine {
             phase2Snapshot = translog.snapshot();
         } catch (Exception e) {
             --disableFlushCounter;
+            targetNodeInRecoveryMap.remove(targetNode.id());
             phase1Snapshot.release();
             if (closed) {
                 e = new EngineClosedException(shardId, e);
@@ -1107,6 +1115,7 @@ public class RobinEngine extends AbstractIndexShardComponent implements Engine {
             recoveryHandler.phase2(phase2Snapshot);
         } catch (Exception e) {
             --disableFlushCounter;
+            targetNodeInRecoveryMap.remove(targetNode.id());
             phase1Snapshot.release();
             phase2Snapshot.release();
             if (closed) {
@@ -1124,6 +1133,7 @@ public class RobinEngine extends AbstractIndexShardComponent implements Engine {
             throw new RecoveryEngineException(shardId, 3, "Execution failed", e);
         } finally {
             --disableFlushCounter;
+            targetNodeInRecoveryMap.remove(targetNode.id());
             rwl.writeLock().unlock();
             phase1Snapshot.release();
             phase2Snapshot.release();
@@ -1132,6 +1142,12 @@ public class RobinEngine extends AbstractIndexShardComponent implements Engine {
             }
         }
     }
+    
+    @Override
+    public ConcurrentMap<String, DiscoveryNode>  targetNodeInRecoveryMap(){
+    	return this.targetNodeInRecoveryMap;
+    }
+    
 
     @Override
     public List<Segment> segments() {

@@ -28,6 +28,7 @@ import org.apache.lucene.search.Filter;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
 import org.elasticsearch.ElasticSearchException;
+import org.elasticsearch.cluster.node.DiscoveryNode;
 import org.elasticsearch.common.Nullable;
 import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.component.CloseableComponent;
@@ -45,6 +46,7 @@ import org.elasticsearch.index.shard.ShardId;
 import org.elasticsearch.index.translog.Translog;
 
 import java.util.List;
+import java.util.concurrent.ConcurrentMap;
 
 /**
  *
@@ -114,7 +116,9 @@ public interface Engine extends IndexShardComponent, CloseableComponent {
 
     <T> T snapshot(SnapshotHandler<T> snapshotHandler) throws EngineException;
 
-    void recover(RecoveryHandler recoveryHandler) throws EngineException;
+    void recover(DiscoveryNode targetNode, RecoveryHandler recoveryHandler) throws EngineException;
+    
+    ConcurrentMap<String, DiscoveryNode>  targetNodeInRecoveryMap();
 
     static interface FailedEngineListener {
         void onFailedEngine(ShardId shardId, Throwable t);

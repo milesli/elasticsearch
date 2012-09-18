@@ -44,6 +44,7 @@ import org.elasticsearch.index.IndexShardMissingException;
 import org.elasticsearch.index.engine.DocumentAlreadyExistsException;
 import org.elasticsearch.index.engine.VersionConflictEngineException;
 import org.elasticsearch.index.shard.IllegalIndexShardStateException;
+import org.elasticsearch.index.shard.service.InternalIndexShard;
 import org.elasticsearch.indices.IndexMissingException;
 import org.elasticsearch.indices.IndicesService;
 import org.elasticsearch.node.NodeClosedException;
@@ -586,6 +587,17 @@ public abstract class TransportShardReplicationOperationAction<Request extends S
                 if (shard.unassigned()) {
                     continue;
                 }
+                
+                // if its initializing and internalIndexShard is recovering, ignore it
+                // reduce, but not eliminate
+                //
+                if(shard.initializing()){
+                	final InternalIndexShard internalIndexShard = (InternalIndexShard) indicesService.indexServiceSafe(shardIt.shardId().index().name()).shardSafe(shardIt.shardId().id());
+                	if(internalIndexShard.targetNodeInRecoveryMap().containsKey(shard.currentNodeId()) ) {
+                		continue;
+                	}
+                }
+                
 
                 // if the shard is primary and relocating, add one to the counter since we perform it on the replica as well
                 // (and we already did it on the primary)

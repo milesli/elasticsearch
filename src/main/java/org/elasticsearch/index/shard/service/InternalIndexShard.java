@@ -30,6 +30,7 @@ import org.elasticsearch.ElasticSearchException;
 import org.elasticsearch.ElasticSearchIllegalArgumentException;
 import org.elasticsearch.ElasticSearchIllegalStateException;
 import org.elasticsearch.cluster.metadata.IndexMetaData;
+import org.elasticsearch.cluster.node.DiscoveryNode;
 import org.elasticsearch.cluster.routing.ShardRouting;
 import org.elasticsearch.common.Booleans;
 import org.elasticsearch.common.Nullable;
@@ -73,6 +74,7 @@ import org.elasticsearch.threadpool.ThreadPool;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.channels.ClosedByInterruptException;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -503,9 +505,14 @@ public class InternalIndexShard extends AbstractIndexShardComponent implements I
     }
 
     @Override
-    public void recover(Engine.RecoveryHandler recoveryHandler) throws EngineException {
+    public void recover(DiscoveryNode targetNode, Engine.RecoveryHandler recoveryHandler) throws EngineException {
         verifyStarted();
-        engine.recover(recoveryHandler);
+        engine.recover(targetNode, recoveryHandler);
+    }
+    
+    @Override
+    public ConcurrentMap<String, DiscoveryNode> targetNodeInRecoveryMap(){
+    	return engine.targetNodeInRecoveryMap();
     }
 
     @Override

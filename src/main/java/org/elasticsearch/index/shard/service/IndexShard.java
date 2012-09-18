@@ -19,7 +19,10 @@
 
 package org.elasticsearch.index.shard.service;
 
+import java.util.concurrent.ConcurrentMap;
+
 import org.elasticsearch.ElasticSearchException;
+import org.elasticsearch.cluster.node.DiscoveryNode;
 import org.elasticsearch.cluster.routing.ShardRouting;
 import org.elasticsearch.common.Nullable;
 import org.elasticsearch.common.bytes.BytesReference;
@@ -104,7 +107,9 @@ public interface IndexShard extends IndexShardComponent {
 
     <T> T snapshot(Engine.SnapshotHandler<T> snapshotHandler) throws EngineException;
 
-    void recover(Engine.RecoveryHandler recoveryHandler) throws EngineException;
+    void recover(DiscoveryNode targetNode, Engine.RecoveryHandler recoveryHandler) throws EngineException;
+
+    ConcurrentMap<String, DiscoveryNode> targetNodeInRecoveryMap();
 
     Engine.Searcher searcher();
 
