@@ -588,16 +588,6 @@ public abstract class TransportShardReplicationOperationAction<Request extends S
                     continue;
                 }
                 
-                // if its initializing and internalIndexShard is recovering, ignore it
-                // reduce, but not eliminate
-                if(shard.initializing()){
-                	final InternalIndexShard internalIndexShard = (InternalIndexShard) indicesService.indexServiceSafe(shardIt.shardId().index().name()).shardSafe(shardIt.shardId().id());
-                	if(internalIndexShard.targetNodeInRecoveryMap().containsKey(shard.currentNodeId()) ) {
-                		continue;
-                	}
-                }
-                
-
                 // if the shard is primary and relocating, add one to the counter since we perform it on the replica as well
                 // (and we already did it on the primary)
                 boolean doOnlyOnRelocating = false;
@@ -607,7 +597,17 @@ public abstract class TransportShardReplicationOperationAction<Request extends S
                     } else {
                         continue;
                     }
+                }else{
+                    // if its initializing and internalIndexShard is recovering, ignore it
+                    // reduce, but not eliminate
+                    if(shard.initializing()){
+                    	final InternalIndexShard internalIndexShard = (InternalIndexShard) indicesService.indexServiceSafe(shardIt.shardId().index().name()).shardSafe(shardIt.shardId().id());
+                    	if(internalIndexShard.targetNodeInRecoveryMap().containsKey(shard.currentNodeId()) ) {
+                    		continue;
+                    	}
+                    }
                 }
+                
                 // we index on a replica that is initializing as well since we might not have got the event
                 // yet that it was started. We will get an exception IllegalShardState exception if its not started
                 // and that's fine, we will ignore it
